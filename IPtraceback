@@ -1,0 +1,987 @@
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+
+
+package iptraceback;
+
+import java.awt.*;
+import java.awt.event.*; 
+
+import java.util.Scanner;
+import java.util.Random;
+
+import javax.swing.*;
+
+import java.net.*;
+import java.io.*;
+
+import java.lang.*;
+
+
+
+class Node
+{
+    int x,y;
+    int type=0;//0=Router,1=Attacker,2=Victim,3=Server
+    int number;//編號
+    int flowtable[][] = new int [1024][6];
+    int tracetable[];
+    int itracetable[][] = new int [1024][6];
+    int threshold;
+    int inip;
+    int enip;
+    long interfIP;
+    int ftnum=1;
+    int index=0;
+    int traceback=0;
+    int itracecount=0;
+    boolean inactive=false;
+    int itrx=0;
+}
+
+class Edge
+{
+    int sx,sy;
+    int ex,ey;
+    boolean path;
+}
+
+class Packet
+{
+    int type;
+    int sourceIP;
+    int destinationIP;
+    int sourcePort;
+    int destinationPort;
+    boolean packet=true;
+}
+
+class FTpacket
+{
+    int IIP;
+    int EIP;             
+    int PSIP;
+    int PDIP;
+    int flag;   
+    int z=0;
+    int ftsourceIP;
+    int ftdestinationIP;
+    boolean ftpacket=true;
+}
+
+class ICMPpacket
+{
+    int interfaceid;
+    int outerfaceid;
+    int sourceip;
+    int destinationip;
+    int ftsourceip;
+    int ftdestinationip;
+}
+
+public class IPtraceback extends JFrame{
+
+    
+    static JTextField field = new JTextField(20);
+    static int threshold;
+    static boolean start = true;
+    static Packet[] packet = new Packet[2048];
+    static ICMPpacket[] icmppacket = new ICMPpacket[2048];
+    static Node[] node = new Node[2048];
+    static Edge[] edge = new Edge[2048];
+    static FTpacket[] ftpacket = new FTpacket[2048];
+    static int num1=0;
+    static int num2=0;
+    static int num3=0;
+    static int nsize[] = new int[num3];
+    static int sent=0;
+    static int temp[] = new int[50];
+    static int temp2=0;
+    static int temp3=0;
+    static int index=0;
+    static int ftpacketon=0;
+    static int n1=0,n2=1,n3=2,n4=3;
+    static int z=1;//ft封包count
+    static int fttotal=0;
+    static int attacknum=0;
+    static long starttime;
+    static long endtime;
+    static int tempnum=1;
+    static int attackcount=0;
+    static int icmpnum=0;
+    static int x=0;
+    static int icmptotal=0;
+    static int attacknumber=0;
+    static long ITRstarttime;
+    static long ITRendtime;
+    static long iTracestarttime;
+    static long iTraceendtime;
+    static int reconpathnum=0;
+    static long timeout;
+    //static int itrx=0;
+    static boolean same;
+    static int itraceth=200;//itrace的threshold
+       
+    public static void main(String[] args) 
+    {
+        new IPtraceback();
+    }
+    
+    public IPtraceback()
+    {
+        Scanner input = new Scanner(System.in);
+        Random ran = new Random();
+        ran.setSeed(System.currentTimeMillis()); 
+
+        
+        System.out.println("請輸入拓樸大小(x,y):");
+        num1=input.nextInt();
+        num2=input.nextInt();
+        System.out.println("請輸入節點數量:");
+        num3=input.nextInt();
+        System.out.println("請輸入每個節點攻擊封包數量:");
+        attacknumber=input.nextInt();
+        
+        JFrame jframe = new JFrame("IP Traceback");
+        jframe.setLocation(0,0);
+        jframe.setSize(num1, num2);
+        jframe.setVisible(true);
+        jframe.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        jframe.getGraphics();
+        jframe.getContentPane().setBackground(Color.WHITE);
+        
+        for(int i=0;i<num3;i++)
+        {
+            node[i] = new Node();
+            edge[i] = new Edge();
+        }
+        
+        
+        Graphics g =jframe.getGraphics();
+        g.setColor(Color.black);
+  
+        for(int i=0;i<num3;i++)
+        {
+            node[i].x = ran.nextInt(400)+50;
+            node[i].y = ran.nextInt(400)+50;
+            node[i].type = 0;
+            node[i].inip = ran.nextInt(5)+1;
+            node[i].enip = ran.nextInt(5)+1;
+            node[i].number = i;
+            System.out.println("Node "+i+" (x,y) is : "+node[i].x+","+node[i].y);
+        }
+        
+        /*for(int a=0;a<=num3;a++)
+        {
+            edge[a].sx=node[a].x;
+            edge[a].sy=node[a].y;
+            edge[a].ex=node[a+1].x;
+            edge[a].ey=node[a+1].y;
+        }*/
+        Graphics g2 = jframe.getGraphics();
+        g2.setColor(Color.gray);
+        
+        for(int j=0;j<num3;j++)
+        { 
+            if(j==num3-1)
+            {
+                ;
+            }
+            else
+            {
+                try
+                {
+                   Thread.sleep(25);
+                   g.fillOval(node[j].x,node[j].y,10,10);
+                   g.fillOval(node[j+1].x,node[j+1].y,10,10);
+                   g2.drawLine(node[j].x+5,node[j].y+5,node[j+1].x+5,node[j+1].y+5);
+                }catch(InterruptedException e){
+                    e.printStackTrace();
+                }
+                //System.out.println("Path "+j+" : "+node[j].x+" "+node[j].y+" to\n"+node[j+1].x+" "+node[j+1].y);
+            }
+    
+        }
+        for(int q=0;q<num3;q++)
+        {
+            try
+            {
+                int q1 = ran.nextInt(num3);
+                int q2 = ran.nextInt(num3);
+                
+                Thread.sleep(10);
+                if(q1 < num3 && q2 < num3)
+                g2.drawLine(node[q1].x+5,node[q1].y+5,node[q2].x+5,node[q2].y+5);
+            }catch(InterruptedException e){
+                e.printStackTrace();
+            }
+        }
+        
+        /*try
+        {
+            Thread.sleep(20000);
+        }catch(InterruptedException e){
+            e.printStackTrace();
+        }*/
+        
+        JFrame jframe2 = new JFrame("IP Traceback2");
+        jframe2.setLocation(num1,0);
+        jframe2.setSize(500,500);
+        jframe2.setVisible(true);
+        jframe2.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        jframe2.getContentPane().setBackground(Color.WHITE);
+              
+        
+        JButton bt1 = new JButton("設定攻擊者");
+        JButton bt2 = new JButton("設定受害者");
+        JButton bt3 = new JButton("開始Traceback");
+        JButton bt4 = new JButton("確定");
+        
+        
+        jframe2.setLayout(null);
+        bt1.setBounds(10, 10, 150, 40);
+        jframe2.add(bt1);
+        bt2.setBounds(10, 60, 150, 40);
+        jframe2.add(bt2);
+        bt3.setBounds(10, 110, 150, 40);
+        jframe2.add(bt3);
+        field.setBounds(10, 160, 150, 40);
+        field.setText("輸入Threshold");
+        jframe2.add(field);
+        bt4.setBounds(160, 160, 100, 40);
+        jframe2.add(bt4);        
+        
+        
+        ActionListener al = new ActionListener(){
+            public void actionPerformed(ActionEvent e){
+                
+                //---------------------------------設定攻擊者是哪個node
+                if(e.getActionCommand().equals("設定攻擊者"))
+                {
+                    Random ran2 = new Random();
+                    Graphics g3 = jframe.getGraphics();
+                    g3.setColor(Color.RED);
+                    int num = 0;
+                    
+                    if(tempnum==0)
+                    {
+                        num=ran2.nextInt(num3/2);
+                        temp[tempnum] = num;
+                        g3.fillOval(node[num].x,node[num].y,10,10);
+                        node[num].type=1;
+                    }
+                    else if(tempnum>=1)
+                    {
+                        do
+                        {
+                            num=ran2.nextInt(num3/2);
+                        }while(num==temp[tempnum-1]);
+                    
+                        temp[tempnum] = num;
+                        g3.fillOval(node[num].x,node[num].y,10,10);
+                        node[num].type=1;
+                    }
+                    
+                    
+                    JOptionPane.showMessageDialog(null, "設置完成", "Attacker", JOptionPane.INFORMATION_MESSAGE );
+
+                    System.out.println("節點"+temp[tempnum]+"已被設置為攻擊者");
+                    System.out.println("Attacker 已產生");
+                    tempnum = tempnum+1;
+                    attackcount = attackcount+1;
+                }
+                //---------------------------------設定受害者是哪個node
+                else if(e.getActionCommand().equals("設定受害者"))
+                {
+                    Random ran3 = new Random();
+                    Graphics g4 = jframe.getGraphics();
+                    g4.setColor(Color.GREEN);
+                    int num = num3-1;//ran3.nextInt(num3);
+                    
+                    //if(num<num3/2)
+                    //{
+                    //    num = ran3.nextInt(num3);
+                    //}
+                    g4.fillOval(node[num].x,node[num].y,10,10);
+                    
+                    temp2=num;//受害者
+                    
+                    Graphics g5 = jframe.getGraphics();
+                    g5.setColor(Color.BLUE);
+                    int num2=0;
+ 
+                    num2 = num3/2;//ran2.nextInt(num3);
+                    //if(num2 != temp && num2 != temp2)
+                    //    num2=num2;
+                    //else
+                    //    num2=ran2.nextInt(num3);
+                    
+                    temp3=num2;//伺服器
+                    g5.fillOval(node[num2].x,node[num2].y,10,10);
+                    node[temp3].type=3;
+                    
+                    JOptionPane.showMessageDialog(null, "設置完成", "Victim", JOptionPane.INFORMATION_MESSAGE );
+                    
+                    node[num].type = 2;//受害者
+                    node[num].tracetable = new int[4096];
+                    
+                    System.out.println("節點"+temp2+"已被設置為受害者");
+                    System.out.println("節點"+temp3+"已被設置為伺服器");
+                    
+                    System.out.println("Victim已產生");
+                }
+                //---------------------------------開始模擬
+                else if(e.getActionCommand().equals("開始Traceback"))
+                {
+                    starttime = System.currentTimeMillis();
+                    
+                    if(start)
+                    {
+                        attThreadITR attackitr = new attThreadITR();
+                        attThreadiTrace attackitrace = new attThreadiTrace();
+ 
+                        tempnum = 1;
+                        
+                        if(attackcount==1)
+                        {
+                            attackitr.run(temp[tempnum]);
+                            
+                            attackitrace.run(temp[tempnum]);
+                        }
+                        else if(attackcount==2)
+                        {
+                            for(int i=1;i<=attackcount;i++)
+                            {
+                                attackitr.run(temp[tempnum]);
+                                attackitrace.run(temp[tempnum]);
+                                tempnum = tempnum+1;
+                            }               
+                        }
+                        else if(attackcount==3)
+                        {
+                            for(int i=1;i<=attackcount;i++)
+                            {
+                                attackitr.run(temp[tempnum]);
+                                attackitrace.run(temp[tempnum]);
+                                tempnum = tempnum+1;
+                            }               
+                        }
+                        else if(attackcount==4)
+                        {
+                            for(int i=1;i<=attackcount;i++)
+                            {
+                                attackitr.run(temp[tempnum]);
+                                attackitrace.run(temp[tempnum]);
+                                tempnum = tempnum+1;
+                            }               
+                        }
+                        else if(attackcount==5)
+                        {
+                            for(int i=1;i<=attackcount;i++)
+                            {
+                                attackitr.run(temp[tempnum]);
+                                attackitrace.run(temp[tempnum]);
+                                tempnum = tempnum+1;
+                            }               
+                        }
+                        
+                        System.out.println("攻擊結束");
+                        endtime = System.currentTimeMillis();
+                            
+                        System.out.println("ITRFTpacket:" + fttotal);
+                        System.out.println("ICMPpacket:" + icmptotal);
+                        System.out.println("ITR路徑重建時間" + (ITRendtime-ITRstarttime) + "毫秒");
+                        System.out.println("iTrace路徑重建時間" + (iTraceendtime-iTracestarttime) + "毫秒");
+                        System.out.println("Simulation共花了:" + (endtime-starttime) + "毫秒"); 
+                        
+                    }
+                    else
+                    {
+                        System.out.println("追蹤失敗");
+                    }
+                }
+                //---------------------------------輸入門檻值
+                else if(e.getActionCommand().equals("確定"))
+                {
+                    int thresholdinput = Integer.parseInt(field.getText());
+                    threshold = thresholdinput;
+                    System.out.println(threshold);
+                }
+            }
+        };
+        
+        bt1.addActionListener(al);
+        bt2.addActionListener(al);
+        bt3.addActionListener(al);
+        bt4.addActionListener(al);      
+            
+        System.out.println("產生完畢");
+    }
+    
+    public class attThreadITR extends Thread 
+    { 
+        public void run(int attnum)
+        {
+            int receive=0;
+            Random ran4 = new Random();                      
+            int num4 = ran4.nextInt(20)+1;
+            int total=0;
+            System.out.println("ITR attnum:"+attnum);
+            for(int z1=1;z1<=attacknumber;z1++)//開始發送100個攻擊封包
+            {
+                System.out.println("ITR發送第："+z1+"個攻擊封包");
+                sent=1;
+                packet[attnum] = new Packet();
+                packet[attnum].type=1;
+                packet[attnum].sourceIP = temp[tempnum];
+                packet[attnum].sourcePort = 8899;
+                packet[attnum].destinationIP = temp3;
+                packet[attnum].destinationPort = 53;
+                packet[attnum].packet=true;
+                ITR(attnum);
+                receive++;
+                sent=0;
+                //itrx = itrx+1;
+                
+            }
+            total = receive-num4;
+            System.out.println("Server共接收到 "+total+"個封包");
+        }
+    }
+    
+    public class attThreadiTrace extends Thread 
+    { 
+        public void run(int attnum)
+        {
+
+            System.out.println("iTrace attnum:"+attnum);
+            for(int z2=1;z2<=attacknumber;z2++)//開始發送100個攻擊封包
+            {
+                System.out.println("iTrace發送第："+z2+"個攻擊封包");
+                sent=1;
+                packet[attnum] = new Packet();
+                packet[attnum].type=1;
+                packet[attnum].sourceIP = attnum;
+                packet[attnum].sourcePort = 8899;
+                packet[attnum].destinationIP = temp3;
+                packet[attnum].destinationPort = 53;
+                packet[attnum].packet=true;
+                iTrace(attnum);
+                sent=0;
+            }
+        }
+    }
+    
+    void iTrace(int num)
+    {
+        System.out.println("iTrace num:"+num);
+        
+        if(node[num].type==1)
+        {
+            System.out.println("node type=1");
+            iTrace(num+1);
+        }
+        else if(node[num].type==0||node[num].type==3)
+        {
+            System.out.println("node type=0");
+            int numb = node[num].number;
+            
+            node[numb].itracecount=node[numb].itracecount+1;
+        
+            if(packet[temp[tempnum]].type==1)
+            {
+                
+                if(node[numb].itracecount>=itraceth)
+                {
+                    node[numb].itracecount=0;
+                    
+                    icmppacket[icmpnum] = new ICMPpacket();
+                    icmppacket[icmpnum].interfaceid=node[numb].inip;
+                    icmppacket[icmpnum].outerfaceid=node[numb].enip;
+                    icmppacket[icmpnum].sourceip=packet[temp[tempnum]].sourceIP;
+                    icmppacket[icmpnum].destinationip=packet[temp[tempnum]].destinationIP;
+                    icmppacket[icmpnum].ftsourceip=node[numb].number;
+                    icmppacket[icmpnum].ftdestinationip=temp2;
+                    
+                    iTracestarttime = System.currentTimeMillis();
+                    iTrace_Rec(icmpnum);
+                    
+                    icmpnum=icmpnum+1;
+                    icmptotal=icmptotal+1;
+                }
+                if(num==(temp[0]+temp2)/2)
+                    iTraceendtime=System.currentTimeMillis();
+                iTrace(num+1);
+            }
+        }
+        else if(node[num].type==2)
+        {
+            System.out.println("node type=2");
+            System.out.println("end of experiment");
+        }
+    }
+    
+    void iTrace_Rec(int num)//iTrace重建路徑
+    {
+                
+        int y=0;
+        node[temp2].itracetable[x][y]=icmppacket[num].interfaceid;
+        y=y+1;
+        node[temp2].itracetable[x][y]=icmppacket[num].outerfaceid;
+        y=y+1;
+        node[temp2].itracetable[x][y]=icmppacket[num].sourceip;
+        y=y+1;
+        node[temp2].itracetable[x][y]=icmppacket[num].destinationip;
+        y=y+1;
+        node[temp2].itracetable[x][y]=icmppacket[num].ftsourceip;
+        y=y+1;
+        node[temp2].itracetable[x][y]=icmppacket[num].ftdestinationip;
+        x=x+1;
+        
+        for(int a=0;a<=x;a++)
+        {
+            System.out.println("iTrace回溯表: "+node[temp2].itracetable[a][0]+" "+node[temp2].itracetable[a][1]+" "+node[temp2].itracetable[a][2]+" "+node[temp2].itracetable[a][3]+" "+node[temp2].itracetable[a][4]+" "+node[temp2].itracetable[a][5]+" ");
+        }
+    }
+    
+    void ITR(int num)
+    {
+        System.out.println("ITR num:"+num);
+        if(node[num].type==1)
+        {
+            System.out.println("node type=1");
+            ITR(num+1);
+        }
+        else if(node[num].type==0)
+        {
+            System.out.println("node type=0");
+            int numb = node[num].number;
+        
+            if(packet[temp[tempnum]].type==0)
+            {
+                if(ftpacket[z].ftdestinationIP==temp3)//若收到的FT封包則判斷destination是不是等於受害伺服器
+                {
+                    ftpacket[z].ftdestinationIP=ftpacket[0].PSIP;
+                    ITR_Rec(z);
+                }
+            }
+            else if(packet[temp[tempnum]].type==1)
+            {
+                int temp1=0;
+                same=false;
+                
+                for(int i=0;i<=node[numb].itrx;i++)
+                {
+                    if(node[numb].flowtable[i][1]==packet[temp[tempnum]].sourceIP)
+                    {
+                        System.out.println("有判斷成功："+node[numb].flowtable[i][1]);
+                        System.out.println("有判斷成功："+packet[temp[tempnum]].sourceIP);
+                        same=true;
+                        /*int tempi=i;
+                        temp1=tempi;
+                        if(node[numb].flowtable[tempi][2]==packet[temp[tempnum]].sourcePort
+                            &&node[numb].flowtable[tempi][3]==packet[temp[tempnum]].destinationIP
+                            &&node[numb].flowtable[tempi][2]==packet[temp[tempnum]].destinationPort)
+                        {
+                            same=true;
+                        }*/
+                    }
+                }
+                if(same==false)
+                        /*(node[numb].flowtable[0][1]!=packet[temp[tempnum]].sourceIP
+                &&node[numb].flowtable[0][2]!=packet[temp[tempnum]].sourcePort
+                &&node[numb].flowtable[0][3]!=packet[temp[tempnum]].destinationIP
+                &&node[numb].flowtable[0][4]!=packet[temp[tempnum]].destinationPort)*/
+                {
+                    System.out.println("沒判斷成功："+node[numb].flowtable[node[numb].itrx][1]);
+                    System.out.println("沒判斷成功："+packet[temp[tempnum]].sourceIP);
+                    System.out.println("type2進入false");
+                    int count = 0;
+                    int y=0;
+                    //int index = 0;
+                    node[numb].flowtable[node[numb].itrx][y]=index;y=y+1;
+                    node[numb].flowtable[node[numb].itrx][y]=packet[temp[tempnum]].sourceIP;y=y+1;
+                    node[numb].flowtable[node[numb].itrx][y]=packet[temp[tempnum]].sourcePort;y=y+1;
+                    node[numb].flowtable[node[numb].itrx][y]=packet[temp[tempnum]].destinationIP;y=y+1;
+                    node[numb].flowtable[node[numb].itrx][y]=packet[temp[tempnum]].destinationPort;y=y+1;
+                    node[numb].flowtable[node[numb].itrx][y]=count;
+                    for(int a=0;a<=node[numb].itrx;a++)
+                    {
+                        System.out.println("ITR flowtable: "+node[numb].flowtable[a][0]+" "+node[numb].flowtable[a][1]+" "+node[numb].flowtable[a][2]+" "+node[numb].flowtable[a][3]+" "+node[numb].flowtable[a][4]+" "+node[numb].flowtable[a][5]+" ");
+                    }
+                    
+                    node[numb].itrx=node[numb].itrx+1;
+                    //itrx = itrx+1;
+
+                    if(node[numb].type==3)
+                    {
+                        ftpacket[2000] = new FTpacket();
+                        ftpacket[2000].PSIP=packet[temp[tempnum]].sourceIP;
+                        ftpacket[2000].PDIP=packet[temp[tempnum]].destinationIP;
+                        ftpacket[2000].EIP=node[numb].enip;
+                        ftpacket[2000].IIP=node[numb].inip;
+                        ftpacket[2000].flag=1;
+                        ftpacket[2000].ftsourceIP=node[numb].number;
+                        ftpacket[2000].ftdestinationIP=temp2;
+                            
+                        System.out.println("節點"+numb+"直接產生第"+node[numb].ftnum+"個flag=1的FT封包到victim");
+                        node[numb].ftnum=node[numb].ftnum+1;
+                            
+                        ITR_Rec(2000);//傳送到victim
+                            
+                        fttotal=fttotal+1;
+                        
+                        timeout = System.currentTimeMillis();
+                    }
+                    else if(node[numb].type==0)
+                    {
+                        ftpacket[z] = new FTpacket();
+                        ftpacket[z].PSIP=packet[temp[tempnum]].sourceIP;
+                        ftpacket[z].PDIP=packet[temp[tempnum]].destinationIP;
+                        ftpacket[z].EIP=node[numb].enip;
+                        ftpacket[z].IIP=node[numb].inip;
+                        ftpacket[z].flag=0;
+                        ftpacket[z].ftsourceIP=node[numb].number;
+                        ftpacket[z].ftdestinationIP=temp3;
+                            
+                        ITR_Rec(z);
+                            
+                        ftpacketon=1;
+                            
+                        System.out.println("節點"+numb+"產生了第"+node[numb].ftnum+"個FT封包");
+                        node[numb].ftnum=node[numb].ftnum+1;
+                        z=z+1;
+                            
+                        fttotal=fttotal+1;
+                        
+                        timeout = System.currentTimeMillis();
+                    }
+                    ITR(num+1);
+                }
+                else//flowtable內有相等的
+                {
+                    System.out.println("type2進入ture");
+                    /*if(node[numb].inactive==true&&(timeout/1000)>15)
+                    {
+                        node[numb].flowtable[temp1][0]=index;
+                        node[numb].flowtable[temp1][1]=0;
+                        node[numb].flowtable[temp1][2]=0;
+                        node[numb].flowtable[temp1][3]=0;
+                        node[numb].flowtable[temp1][4]=0;          
+                    }
+                    else if(node[numb].inactive==false&&(timeout/1000)>1800)
+                    {
+                        node[numb].flowtable[temp1][0]=index;
+                        node[numb].flowtable[temp1][1]=0;
+                        node[numb].flowtable[temp1][2]=0;
+                        node[numb].flowtable[temp1][3]=0;
+                        node[numb].flowtable[temp1][4]=0;   
+                    }*/
+                        
+                    /*if(node[numb].flowtable[0][5]>=threshold)//發送FT封包
+                    {
+                        if(node[numb].type==3)
+                        {
+                            ftpacket[2000] = new FTpacket();
+                            ftpacket[2000].PSIP=packet[temp[tempnum]].sourceIP;
+                            ftpacket[2000].PDIP=packet[temp[tempnum]].destinationIP;
+                            ftpacket[2000].EIP=node[numb].enip;
+                            ftpacket[2000].IIP=node[numb].inip;
+                            ftpacket[2000].flag=1;
+                            ftpacket[2000].ftsourceIP=node[numb].number;
+                            ftpacket[2000].ftdestinationIP=temp2;
+                            node[numb].flowtable[0][5]=0;
+                            
+                            System.out.println("節點"+numb+"直接產生第"+node[numb].ftnum+"個flag=1的FT封包到victim");
+                            node[numb].ftnum=node[numb].ftnum+1;
+                            
+                            ITR_Rec(2000);//傳送到victim
+                            
+                            fttotal=fttotal+1;
+                        }
+                        else if(node[numb].type==0)
+                        {
+                            ftpacket[z] = new FTpacket();
+                            ftpacket[z].PSIP=packet[temp[tempnum]].sourceIP;
+                            ftpacket[z].PDIP=packet[temp[tempnum]].destinationIP;
+                            ftpacket[z].EIP=node[numb].enip;
+                            ftpacket[z].IIP=node[numb].inip;
+                            ftpacket[z].flag=0;
+                            ftpacket[z].ftsourceIP=node[numb].number;
+                            ftpacket[z].ftdestinationIP=temp3;
+                            
+                            ITR_Rec(z);
+                            
+                            node[numb].flowtable[0][5]=0;
+                            
+                            ftpacketon=1;
+                            
+                            System.out.println("節點"+numb+"產生了第"+node[numb].ftnum+"個FT封包");
+                            node[numb].ftnum=node[numb].ftnum+1;
+                            z=z+1;
+                            
+                            fttotal=fttotal+1;
+                        }
+                    }*/
+                    ITR(num+1);
+                }
+            }
+        }
+        else if(node[num].type==3)
+        {
+            System.out.println("node type=3");
+            int numb = node[num].number;
+        
+            if(packet[temp[tempnum]].type==0)
+            {
+                if(ftpacket[z].ftdestinationIP==temp3)//若收到的FT封包則判斷destination是不是等於受害伺服器
+                {
+                    ftpacket[z].ftdestinationIP=ftpacket[0].PSIP;
+                    ITR_Rec(z);
+                }
+            }
+            else if(packet[temp[tempnum]].type==1)
+            {
+                int temp1=0;
+                same=false;
+                
+                for(int i=0;i<=node[numb].itrx;i++)
+                {
+                    if(node[numb].flowtable[i][1]==packet[temp[tempnum]].sourceIP)
+                    {
+                        same=true;
+                        /*int tempi=i;
+                        temp1=tempi;
+                        if(node[numb].flowtable[tempi][2]==packet[temp[tempnum]].sourcePort
+                            &&node[numb].flowtable[tempi][3]==packet[temp[tempnum]].destinationIP
+                            &&node[numb].flowtable[tempi][2]==packet[temp[tempnum]].destinationPort)
+                        {
+                            same=true;
+                        }*/
+                    }
+                }
+                if(same==false)
+                        /*(node[numb].flowtable[0][1]!=packet[temp[tempnum]].sourceIP
+                &&node[numb].flowtable[0][2]!=packet[temp[tempnum]].sourcePort
+                &&node[numb].flowtable[0][3]!=packet[temp[tempnum]].destinationIP
+                &&node[numb].flowtable[0][4]!=packet[temp[tempnum]].destinationPort)*/
+                {
+                    System.out.println("type3進入false");
+                    int count = 0;
+                    int y=0;
+                    //int index = 0;
+                    node[numb].flowtable[node[numb].itrx][y]=index;y=y+1;
+                    node[numb].flowtable[node[numb].itrx][y]=packet[temp[tempnum]].sourceIP;y=y+1;
+                    node[numb].flowtable[node[numb].itrx][y]=packet[temp[tempnum]].sourcePort;y=y+1;
+                    node[numb].flowtable[node[numb].itrx][y]=packet[temp[tempnum]].destinationIP;y=y+1;
+                    node[numb].flowtable[node[numb].itrx][y]=packet[temp[tempnum]].destinationPort;y=y+1;
+                    node[numb].flowtable[node[numb].itrx][y]=count;
+                    for(int a=0;a<=node[numb].itrx;a++)
+                    {
+                        System.out.println("ITR flowtable: "+node[numb].flowtable[a][0]+" "+node[numb].flowtable[a][1]+" "+node[numb].flowtable[a][2]+" "+node[numb].flowtable[a][3]+" "+node[numb].flowtable[a][4]+" "+node[numb].flowtable[a][5]+" ");
+                    }
+                    
+                    node[numb].itrx=node[numb].itrx+1;
+                    //itrx = itrx+1;
+
+                    if(node[numb].type==3)
+                    {
+                        ftpacket[2000] = new FTpacket();
+                        ftpacket[2000].PSIP=packet[temp[tempnum]].sourceIP;
+                        ftpacket[2000].PDIP=packet[temp[tempnum]].destinationIP;
+                        ftpacket[2000].EIP=node[numb].enip;
+                        ftpacket[2000].IIP=node[numb].inip;
+                        ftpacket[2000].flag=1;
+                        ftpacket[2000].ftsourceIP=node[numb].number;
+                        ftpacket[2000].ftdestinationIP=temp2;
+                            
+                        System.out.println("節點"+numb+"直接產生第"+node[numb].ftnum+"個flag=1的FT封包到victim");
+                        node[numb].ftnum=node[numb].ftnum+1;
+                            
+                        ITR_Rec(2000);//傳送到victim
+                            
+                        fttotal=fttotal+1;
+                        
+                        timeout = System.currentTimeMillis();
+                    }
+                    else if(node[numb].type==0)
+                    {
+                        ftpacket[z] = new FTpacket();
+                        ftpacket[z].PSIP=packet[temp[tempnum]].sourceIP;
+                        ftpacket[z].PDIP=packet[temp[tempnum]].destinationIP;
+                        ftpacket[z].EIP=node[numb].enip;
+                        ftpacket[z].IIP=node[numb].inip;
+                        ftpacket[z].flag=0;
+                        ftpacket[z].ftsourceIP=node[numb].number;
+                        ftpacket[z].ftdestinationIP=temp3;
+                            
+                        ITR_Rec(z);
+                            
+                        ftpacketon=1;
+                            
+                        System.out.println("節點"+numb+"產生了第"+node[numb].ftnum+"個FT封包");
+                        node[numb].ftnum=node[numb].ftnum+1;
+                        z=z+1;
+                            
+                        fttotal=fttotal+1;
+                        
+                        timeout = System.currentTimeMillis();
+                    }
+                }
+                else//flowtable內有相等的
+                {
+                    System.out.println("type3進入ture");
+                    /*if(node[numb].inactive==true&&(timeout/1000)>15)
+                    {
+                        node[numb].flowtable[temp1][0]=index;
+                        node[numb].flowtable[temp1][1]=0;
+                        node[numb].flowtable[temp1][2]=0;
+                        node[numb].flowtable[temp1][3]=0;
+                        node[numb].flowtable[temp1][4]=0;          
+                    }
+                    else if(node[numb].inactive==false&&(timeout/1000)>1800)
+                    {
+                        node[numb].flowtable[temp1][0]=index;
+                        node[numb].flowtable[temp1][1]=0;
+                        node[numb].flowtable[temp1][2]=0;
+                        node[numb].flowtable[temp1][3]=0;
+                        node[numb].flowtable[temp1][4]=0;   
+                    }*/
+                        
+                    /*if(node[numb].flowtable[0][5]>=threshold)//發送FT封包
+                    {
+                        if(node[numb].type==3)
+                        {
+                            ftpacket[2000] = new FTpacket();
+                            ftpacket[2000].PSIP=packet[temp[tempnum]].sourceIP;
+                            ftpacket[2000].PDIP=packet[temp[tempnum]].destinationIP;
+                            ftpacket[2000].EIP=node[numb].enip;
+                            ftpacket[2000].IIP=node[numb].inip;
+                            ftpacket[2000].flag=1;
+                            ftpacket[2000].ftsourceIP=node[numb].number;
+                            ftpacket[2000].ftdestinationIP=temp2;
+                            node[numb].flowtable[0][5]=0;
+                            
+                            System.out.println("節點"+numb+"直接產生第"+node[numb].ftnum+"個flag=1的FT封包到victim");
+                            node[numb].ftnum=node[numb].ftnum+1;
+                            
+                            ITR_Rec(2000);//傳送到victim
+                            
+                            fttotal=fttotal+1;
+                        }
+                        else if(node[numb].type==0)
+                        {
+                            ftpacket[z] = new FTpacket();
+                            ftpacket[z].PSIP=packet[temp[tempnum]].sourceIP;
+                            ftpacket[z].PDIP=packet[temp[tempnum]].destinationIP;
+                            ftpacket[z].EIP=node[numb].enip;
+                            ftpacket[z].IIP=node[numb].inip;
+                            ftpacket[z].flag=0;
+                            ftpacket[z].ftsourceIP=node[numb].number;
+                            ftpacket[z].ftdestinationIP=temp3;
+                            
+                            ITR_Rec(z);
+                            
+                            node[numb].flowtable[0][5]=0;
+                            
+                            ftpacketon=1;
+                            
+                            System.out.println("節點"+numb+"產生了第"+node[numb].ftnum+"個FT封包");
+                            node[numb].ftnum=node[numb].ftnum+1;
+                            z=z+1;
+                            
+                            fttotal=fttotal+1;
+                        }
+                    }*/
+                }
+            } 
+        }
+    }
+    
+    void ITR_Rec(int num)
+    {
+        if(num==1)
+            ITRstarttime = System.currentTimeMillis();
+        System.out.println("ITRtime:"+ITRstarttime);
+        if(/*ftpacket[num].PSIP==node[temp2].tracetable[0]&&ftpacket[num].PDIP==node[temp2].tracetable[1]&&*/ftpacket[num].flag==1)
+        {
+            System.out.println("1111111111");
+            node[temp2].tracetable[2]=0;
+            node[temp2].tracetable[3]=0;
+            
+            if(node[temp2].tracetable[2]==0 && node[temp2].tracetable[3]==0)
+            {
+                node[temp2].tracetable[2]=ftpacket[num].EIP;
+                node[temp2].tracetable[3]=ftpacket[num].IIP;
+                System.out.print("輸出路徑:");
+                for(int j=0;j<node[temp2].tracetable.length/2;j++)
+                {
+                    System.out.print(node[temp2].tracetable[j]+"-");
+                }
+                System.out.println("\nDRDoS路徑重建完成");
+                if(reconpathnum==0)
+                    ITRendtime = System.currentTimeMillis();
+                System.out.println("ITRendtime:"+ITRendtime);
+                for(int i=0;i<node[temp2].tracetable.length;i++)//把tracetable歸零
+                {
+                    node[temp2].tracetable[i] = 0;
+                }
+                if(node[temp2].traceback==0)
+                {
+                    node[temp2].traceback=1;
+                    attacknum=attacknum+1;
+                }
+                reconpathnum = reconpathnum+1;
+            }
+            else
+                System.out.println("位置重疊,重建錯誤");
+        }
+        else if(ftpacket[num].PSIP==node[temp2].tracetable[0]&&ftpacket[num].PDIP==node[temp2].tracetable[1]&&ftpacket[num].flag==0)
+        {
+            System.out.println("22222222222");
+            if(node[temp2].tracetable[2]!=0 && node[temp2].tracetable[3]!=0)
+            {
+                //System.out.println("HELLO~~~~~~~~~~");
+                
+                node[temp2].tracetable[2]=ftpacket[num].EIP;//2.3都沒值後放EIP.IIP進去
+                node[temp2].tracetable[3]=ftpacket[num].IIP;
+                
+                for(int i=node[temp2].tracetable.length-1;i>=2;i--)//從後面往前檢查
+                {
+                    if(node[temp2].tracetable[i]!=0)//要是有值就往後般兩個位置
+                    {
+                        node[temp2].tracetable[i+2]=node[temp2].tracetable[i];
+                    }
+                }
+                
+                for(int j=0;j<30;j++)
+                {
+                    System.out.println("flag=0:"+node[temp2].tracetable[j]);
+                }
+            }
+            else
+                System.out.println("no output-------");
+        }
+        else
+        {
+            System.out.println("33333333");
+            node[temp2].tracetable[0]=ftpacket[num].PSIP;//新建表格
+            node[temp2].tracetable[1]=ftpacket[num].PDIP;
+            node[temp2].tracetable[2]=ftpacket[num].EIP;
+            node[temp2].tracetable[3]=ftpacket[num].IIP;
+            
+            for(int i=node[temp2].tracetable.length-1;i>=2;i--)//從後面往前檢查
+            {
+                if(node[temp2].tracetable[i]!=0)//要是有值就往後搬兩個位置
+                {
+                    node[temp2].tracetable[i+2]=node[temp2].tracetable[i];
+                }
+            }
+            System.out.println("Victim "+temp2+" Tracetable:"+node[temp2].tracetable[0]+" "+node[temp2].tracetable[1]+" "+node[temp2].tracetable[2]+" "+node[temp2].tracetable[3]);
+        }
+        
+    }
+}
